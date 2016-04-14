@@ -3,57 +3,68 @@
 namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
-use App\Album;
-use JWTAuth;
-use Tymon\JWTAuthExceptions\JWTException;
+use App\Http\Requests;
 use Auth;
 
-class AlbumController extends Controller
+class AlbumController extends RESTController
 {
     public function __construct()
     {
+        $this->model = 'App\Album';
         $this->middleware('jwt.auth');
     }
+    /**
+     * Display all allowed albums
+     *
+     * @return \Illuminate\Http\Response
+     */
     public function index()
     {
-        return response()->json(Auth::user()->getAllowedAlbums());
+        return response()->json(Auth::user()->albumsAllowed());
     }
-    public function store(Request $request)
-    {
-        $object = Album::createNew($request);
-        if(array_key_exists('auth_error', $object)) {
-            return response()->json($object, 403);
-        }
-        if(array_key_exists('validation_errors', $object)) {
-            return response()->json($object, 400);
-        }
-        return response()->json($object, 201);
-    }
-    public function update(Request $request, Album $albums)
-    {
-        $result = $albums->updateAlbum($request);
-        if(array_key_exists('auth_error', $result)) {
-            return response()->json($result, 403);
-        }
-        if(array_key_exists('validation_errors', $result)) {
-            return response()->json($result, 400);
-        }
-        return response()->json($result, 204);
-    }
-    public function destroy(Request $request, Album $albums)
-    {
-        $result = $albums->deleteAlbum($request);
-        if(array_key_exists('auth_error', $result)) {
-            return response()->json($result, 403);
-        }
-        return response()->json($result, 204);
-    }
-    public function show(Request $request, Album $albums)
-    {
-        $object = $albums->showAlbum($request);
-        if(array_key_exists('auth_error', $object)) {
-            return response()->json($object, 403);
-        }
-        return response()->json($object);
-    }
+
+    /**
+     * Store a newly created resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @return \Illuminate\Http\Response
+     */
+    //public function store(Request $request)
+    //{
+        //
+    //}
+
+    /**
+     * Display the specified resource.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    //public function show($id)
+    //{
+        //
+    //}
+
+    /**
+     * Update the specified resource in storage.
+     *
+     * @param  \Illuminate\Http\Request  $request
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    //public function update(Request $request, $id)
+    //{
+        //
+    //}
+
+    /**
+     * Remove the specified resource from storage.
+     *
+     * @param  int  $id
+     * @return \Illuminate\Http\Response
+     */
+    //public function destroy($id)
+    //{
+        //
+    //}
 }

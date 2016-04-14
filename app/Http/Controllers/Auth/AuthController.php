@@ -9,8 +9,7 @@ use Illuminate\Foundation\Auth\ThrottlesLogins;
 use Illuminate\Foundation\Auth\AuthenticatesAndRegistersUsers;
 use Illuminate\Http\Request;
 use JWTAuth;
-use Tymon\JWTAuthExceptions\JWTException;
-use Gate;
+use Tymon\JWTAuth\Exceptions\JWTException;
 
 class AuthController extends Controller
 {
@@ -42,7 +41,7 @@ class AuthController extends Controller
     public function __construct()
     {
         $this->middleware($this->guestMiddleware(), ['except' => 'logout']);
-        $this->middleware('jwt.auth', ['except' => ['authenticate', 'store']]);
+        $this->middleware('jwt.auth', ['except' => ['authenticate']]);
     }
 
     /**
@@ -74,7 +73,6 @@ class AuthController extends Controller
             'password' => bcrypt($data['password']),
         ]);
     }
-
     public function authenticate(Request $request)
     {
         $credentials = $request->only('username', 'password');
@@ -86,49 +84,5 @@ class AuthController extends Controller
             return response()->json(['error' => 'could_not_create_token'], 500);
         }
         return response()->json(compact('token'));
-    }
-
-    public function index()
-    {
-        $users = User::getUsers();
-        if(array_key_exists('auth_error', $users)) {
-            return response()->json($users, 403);
-        }
-        return response()->json($users);
-    }
-    public function store(Request $request)
-    {
-        $object = User::createNew($request);
-        if(array_key_exists('validation_errors', $object)) {
-            return response()->json($object, 400);
-        }
-        return response()->json($object, 201);
-    }
-    public function update(Request $request, User $users)
-    {
-        $result = $users->updateUser($request);
-        if(array_key_exists('auth_error', $result)) {
-            return response()->json($result, 403);
-        }
-        if(array_key_exists('validation_errors', $result)) {
-            return response()->json($result, 400);
-        }
-        return response()->json($result, 204);
-    }
-    public function destroy(Request $request, User $users)
-    {
-        $result = $users->deleteUser($request);
-        if(array_key_exists('auth_error', $result)) {
-            return response()->json($result, 403);
-        }
-        return response()->json($result, 204);
-    }
-    public function show(Request $request, User $users)
-    {
-        $object = $users->showAlbum($request);
-        if(array_key_exists('auth_error', $object)) {
-            return response()->json($object, 403);
-        }
-        return response()->json($object);
     }
 }

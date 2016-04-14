@@ -3,11 +3,9 @@
 namespace App;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
-use Illuminate\Http\Request;
-use Gate;
 use Validator;
 use Hash;
-use Illuminate\Support\Facades\Input;
+//use Illuminate\Database\Eloquent\Model;
 
 class User extends Authenticatable
 {
@@ -17,7 +15,7 @@ class User extends Authenticatable
      * @var array
      */
     protected $fillable = [
-        'name', 'username', 'password',
+        'name', 'username', 'password', 'role',
     ];
 
     /**
@@ -28,16 +26,11 @@ class User extends Authenticatable
     protected $hidden = [
         'password', 'remember_token',
     ];
-
     public function albumsCreated()
     {
         return $this->hasMany(Album::class, 'author');
     }
     public function albumsAllowed()
-    {
-        return $this->belongsToMany(Album::class, 'permissions', 'user', 'album')->withPivot('access');
-    }
-    public function getAllowedAlbums()
     {
         if($this->role === 'admin') {
             return Album::all();
@@ -49,64 +42,42 @@ class User extends Authenticatable
                                 ->union(Album::where('author', $this->id))->get();
         }
         if($this->role === 'client') {
-            return $this->albumsAllowed;
+            return Album::join('permissions', 'albums.id', '=', 'album')
+                                ->where('user', $this->id)
+                                ->select('albums.id', 'author', 'name', 'active', 'albums.created_at', 'albums.updated_at')->get();
         }
     }
-    public static function getUsers()
+    public static function getValidator(array $data)
     {
-        if(Gate::denies('view-profiles')) {
-            return ['auth_error' => 'Access denied'];
-        }
-        return User::all();
-    }
-    public static function createNew(Request $request)
-    {
-        $validator = Validator::make($request->all(), [
+        return Validator::make($data, [
             'username' => 'required|unique:users|max:255',
             'name' => 'required|alpha|max:255',
-            'password' => 'required|between:4,20',
+            'password' => 'required|between:4,60',
             'role' => 'required|in:admin,photographer,client',
+        ]);
+    }
+    public static function create(array $attributes = Array())
+    {
+        $validator = User::getValidator($attributes);
+        if($validator->fails()) {
+            return ['validation_errors' => $validator->errors()->all()];
+        }
+        else {
+            $attributes['password'] = Hash::make($attributes['password']);
+            return parent::create($attributes);
+        }
+    }
+    public function save(array $options = Array())
+    {
+        $validator = User::getValidator([
+            'username' => $this->username,
+            'name' => $this->name,
+            'password' => $this->password,
+            'role' => $this->role,
         ]);
         if($validator->fails()) {
             return ['validation_errors' => $validator->errors()->all()];
         }
-        $user = new User;
-        $user->role = $request->input('role');
-        $user->name = $request->input('name');
-        $user->username = $request->input('username');
-        $user->password = Hash::make($request->input('password'));
-        $user->save();
-        return $user;
-    }
-    public function updateUser(Request $request)
-    {
-        if(Gate::denies('change-profile', $this)) {
-            return ['auth_error' => 'You have no permission to edit this profile'];
-        }
-        $validator = Validator::make($request->all(), [
-            'username' => 'unique:users|max:255',
-            'name' => 'alpha|max:255',
-            'password' => 'between:4,20',
-            'role' => 'in:admin,photographer,client',
-        ]);
-        if(Input::exists('username')) $this->username = $request->input('username');
-        if(Input::exists('name')) $this->name = $request->input('name');
-        if(Input::exists('password')) $this->password = Hash::make($request->input('password'));
-        if(Input::exists('role') && $this->role === 'admin') $this->role = $request->input('role');
-        $this->save();
-        return [];
-    }
-    public function deleteUser(Request $request) {
-        if(Gate::denies('change-profile', $this)) {
-            return ['auth_error' => 'You have no permission to delete this profile'];
-        }
-        User::destroy($this->id);
-        return [];
-    }
-    public function showAlbum(Request $request) {
-        if(Gate::denies('change-profile', $this)) {
-            return ['auth_error' => 'You have no permission to view this profile'];
-        }
-        return $this;
+        else return parent::save($options);
     }
 }

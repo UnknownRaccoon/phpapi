@@ -16,11 +16,18 @@ Route::get('/', function () {
 });
 
 Route::resource('albums', 'AlbumController', ['only' => [
-    'index', 'store', 'show', 'update', 'destroy'
-]]);
+        'index', 'store', 'show', 'update', 'destroy'
+    ],
+    'parameters' => [
+        'albums' => 'id',
+    ] 
+]);
 
-Route::resource('users', 'Auth\AuthController', ['only' => [
-    'index', 'store', 'show', 'update', 'destroy'
-]]);
+Route::resource('users', 'UserController', ['only' => [
+        'index', 'store', 'show', 'update', 'destroy',
+    ], 'parameters' => [
+        'users' => 'id',
+    ] 
+]);
 
 Route::post('/login', 'Auth\AuthController@authenticate');
