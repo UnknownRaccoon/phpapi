@@ -15,7 +15,7 @@ class User extends Authenticatable
      * @var array
      */
     protected $fillable = [
-        'name', 'username', 'password', 'role',
+        'name', 'username', 'password', 'role', 'email'
     ];
 
     /**
@@ -47,10 +47,12 @@ class User extends Authenticatable
                                 ->select('albums.id', 'author', 'name', 'active', 'albums.created_at', 'albums.updated_at')->get();
         }
     }
-    public static function getValidator(array $data)
+    public static function getValidator(array $data, $isUpdate = false)
     {
+        $nameValidation = 'required|max:255';
+        if(!$isUpdate) $nameValidation .= '|unique:users';
         return Validator::make($data, [
-            'username' => 'required|unique:users|max:255',
+            'username' => $nameValidation,
             'name' => 'required|alpha|max:255',
             'password' => 'required|between:4,60',
             'role' => 'required|in:admin,photographer,client',
@@ -74,7 +76,7 @@ class User extends Authenticatable
             'name' => $this->name,
             'password' => $this->password,
             'role' => $this->role,
-        ]);
+        ], true);
         if($validator->fails()) {
             return ['validation_errors' => $validator->errors()->all()];
         }
