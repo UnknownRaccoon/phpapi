@@ -31,3 +31,5 @@ Route::resource('users', 'UserController', ['only' => [
 ]);
 
 Route::post('/login', 'Auth\AuthController@authenticate');
+Route::get('/reset', 'Auth\PasswordController@reset');
+Route::post('/reset/{token}', 'Auth\PasswordController@setNew');

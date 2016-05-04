@@ -50,7 +50,7 @@ class Handler extends ExceptionHandler
         $response = [];
         $response['error'] = $e->getMessage();
         $response['code'] = $code->getStatusCode();
-        return response()->json($response, $code->getStatusCode());
-        //return parent::render($request, $e);
+        //return response()->json($response, $code->getStatusCode());
+        return parent::render($request, $e);
     }
 }
