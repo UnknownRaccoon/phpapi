@@ -2,15 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use Auth, Gate, Hash;
 use Illuminate\Http\Request;
+use App\User;
 
-class UserController extends RESTController
+class UserController extends Controller
 {
     public function __construct()
     {
-        $this->authRequired = ['index', 'update', 'show', 'delete'];
-        $this->model = 'App\User';
-        $this->middleware('jwt.auth', ['except' => ['store']]);
+        $this->middleware('jwt.auth', ['except' => 'store']);
     }
 
     /**
@@ -34,18 +34,26 @@ class UserController extends RESTController
      * @apiErrorExample Error-Response:
      *     HTTP/1.1 403 Forbidden
      *     {
-     *          "error":"This action is unauthorized.",
+     *          "error":"You have no acces to this function",
      *          "code":403
      *     }
      */
     public function index()
     {
-        return parent::index();
+        if(!Auth::user()->isAdmin()) {
+            return $this->jsonErrorResponse('You have no acces to this function', 403);
+        }
+        return response()->json(User::all());
     }
 
     /**
      * @api {post} /users/ Add New User
      *
+     * @apiParam {String} username Username
+     * @apiParam {String} name User's real name
+     * @apiParam {String} role User's role
+     * @apiParam {String} password User's password
+     * @apiParam {String} email User's email
      * @apiGroup Users
      * @apiSuccessExample Success-Response:
      *     HTTP/1.1 201 Created
@@ -67,12 +75,15 @@ class UserController extends RESTController
      */
     public function store(Request $request)
     {
-        return parent::store($request);
+        User::validate($request->all());
+        $request->merge(['password' => Hash::make($request->all()['password'])]);
+        return response()->json(User::create($request->all()), 201);
     }
 
     /**
-     * @api {get} /users/:id Get User
-     * @apiParam {Number} id User identifier
+     * @api {get} /users/:user Get User
+     *
+     * @apiParam {Number} user User identifier
      * @apiGroup Users
      * @apiSuccessExample Success-Response:
      *     HTTP/1.1 200 OK
@@ -95,14 +106,23 @@ class UserController extends RESTController
      *          "code":403
      *     }
      */
-    public function show($id)
+    public function show(User $user)
     {
-        return parent::show($id);
+        if(Gate::denies('access', $user)) {
+            return $this->jsonErrorResponse('Access denied', 403);
+        }
+        return response()->json($user);
     }
 
     /**
-     * @api {put} /users/:id Update User Data
-     * @apiParam {Number} id User identifier
+     * @api {put} /users/:user Update User Data
+     *
+     * @apiParam {Number} user User identifier
+     * @apiParam {String} username Username
+     * @apiParam {String} name User's real name
+     * @apiParam {String} role User's role
+     * @apiParam {String} password User's password
+     * @apiParam {String} email User's email
      * @apiGroup Users
      * @apiSuccessExample Success-Response:
      *     HTTP/1.1 204 No Content
@@ -114,13 +134,25 @@ class UserController extends RESTController
      *          "code":403
      *     }
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, User $user)
     {
-        return parent::update($request, $id);
+        if(Gate::denies('access', $user)) {
+            return $this->jsonErrorResponse('Access denied', 403);
+        }
+        User::validate($request->all(), $user->id, false);
+        if($request->exists('password')) {
+            $request->merge(['password' => Hash::make($request->all()['password'])]);
+        }
+        if(!Auth::user()->isAdmin()) {
+            $request->merge(['role' => Auth::user()->role]);
+        }
+        $user->update($request->all());
+        return response()->json([], 204);
     }
 
     /**
      * @api {delete} /users/:id Delete User
+     *
      * @apiParam {Number} id User identifier
      * @apiGroup Users
      * @apiSuccessExample Success-Response:
@@ -133,8 +165,13 @@ class UserController extends RESTController
      *          "code":403
      *     }
      */
-    public function destroy($id)
+    public function destroy(User $user)
     {
-        return parent::destroy($id);
+        if(Gate::denies('access', $user)) {
+            return $this->jsonErrorResponse('Access denied', 403);
+        }
+        $user->delete();
+        return response()->json([], 204);
     }
 }
+    

@@ -4,18 +4,43 @@ namespace App;
 
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Validator;
-use Hash;
-//use Illuminate\Database\Eloquent\Model;
 
+/**
+ * App\User
+ *
+ * @property integer $id
+ * @property string $role
+ * @property string $name
+ * @property string $username
+ * @property string $password
+ * @property string $email
+ * @property string $remember_token
+ * @property \Carbon\Carbon $created_at
+ * @property \Carbon\Carbon $updated_at
+ * @method static \Illuminate\Database\Query\Builder|\App\User whereId($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\User whereRole($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\User whereName($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\User whereUsername($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\User wherePassword($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\User whereEmail($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\User whereRememberToken($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\User whereCreatedAt($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\User whereUpdatedAt($value)
+ * @mixin \Eloquent
+ */
 class User extends Authenticatable
 {
+    use SafeModelTrait;
+
+    //TODO: remove password hashing from controller and implement it using mutator
+    
     /**
      * The attributes that are mass assignable.
      *
      * @var array
      */
     protected $fillable = [
-        'name', 'username', 'password', 'role', 'email'
+        'name', 'email', 'password', 'username', 'role',
     ];
 
     /**
@@ -24,62 +49,96 @@ class User extends Authenticatable
      * @var array
      */
     protected $hidden = [
-        'password', 'remember_token',
+        'password',
     ];
+
+    /**
+     * @return bool
+     */
+    public function isAdmin()
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Returns list of albums created by user
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
     public function albumsCreated()
     {
         return $this->hasMany(Album::class, 'author');
     }
+
+    /**
+     * Returns list of albums that user is allowed to view
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
     public function albumsAllowed()
+    {
+        return $this->belongsToMany(Album::class, 'permissions', 'user', 'album');
+    }
+
+    /**
+     * Returns list of all albums user has access to
+     *
+     * @return \Illuminate\Database\Eloquent\Collection|mixed|static[]
+     */
+    public function albumsAllowedIncludingOwn()
     {
         if($this->role === 'admin') {
             return Album::all();
         }
         if($this->role === 'photographer') {
-            return Album::join('permissions', 'albums.id', '=', 'album')
-                                ->where('user', $this->id)
-                                ->select('albums.id', 'author', 'name', 'active', 'albums.created_at', 'albums.updated_at')
-                                ->union(Album::where('author', $this->id))->get();
+            return $this->albumsCreated->merge($this->albumsAllowed);
         }
-        if($this->role === 'client') {
-            return Album::join('permissions', 'albums.id', '=', 'album')
-                                ->where('user', $this->id)
-                                ->select('albums.id', 'author', 'name', 'active', 'albums.created_at', 'albums.updated_at')->get();
+        if($this->role == 'client') {
+            return $this->albumsAllowed;
         }
     }
-    public static function getValidator(array $data, $isUpdate = false)
+
+    /**
+     * Returns user's access level for specified album
+     *
+     * @param \App\Album $album
+     * @return mixed|string
+     */
+    public function getAccess(Album $album)
     {
-        $nameValidation = 'required|max:255';
-        if(!$isUpdate) $nameValidation .= '|unique:users';
-        return Validator::make($data, [
-            'username' => $nameValidation,
-            'name' => 'required|alpha|max:255',
-            'password' => 'required|between:4,60',
-            'role' => 'required|in:admin,photographer,client',
-        ]);
+        if($this->isAdmin() || $album->author === $this->id) return 'full';
+        $permission = Permission::whereUser($this->id)->whereAlbum($album->id)->first();
+        if($permission === null) return 'denied';
+        return $permission->access;
     }
-    public static function create(array $attributes = Array())
+
+    /**
+     * Validates model data, used inside SafeModelTrait
+     * 
+     * @param array $data
+     * @param int $id
+     * @param bool $required
+     * @return \Illuminate\Validation\Validator
+     */
+    private static function prepareValidator(array $data = [], $id = 0, $required = true)
     {
-        $validator = User::getValidator($attributes);
-        if($validator->fails()) {
-            return ['validation_errors' => $validator->errors()->all()];
+        $validationArray = [
+            'role' => 'in:admin,photographer,client',
+            'name' => 'alpha|max:50',
+            'username' => 'max:30|unique:users,username',
+            'email' => 'email|max:255|unique:users,email',
+            'password' => 'between:4,60',
+        ];
+        if($id > 0) {
+            $validationArray['username'] .= ",{$id}";
+            $validationArray['email'] .= ",{$id}";
         }
-        else {
-            $attributes['password'] = Hash::make($attributes['password']);
-            return parent::create($attributes);
+        if($required) {
+            $validationArray['username'] .= '|required';
+            $validationArray['password'] .= '|required';
+            $validationArray['role'] .= '|required';
+            $validationArray['email'] .= '|required';
         }
-    }
-    public function save(array $options = Array())
-    {
-        $validator = User::getValidator([
-            'username' => $this->username,
-            'name' => $this->name,
-            'password' => $this->password,
-            'role' => $this->role,
-        ], true);
-        if($validator->fails()) {
-            return ['validation_errors' => $validator->errors()->all()];
-        }
-        else return parent::save($options);
+        return Validator::make($data, $validationArray);
     }
 }

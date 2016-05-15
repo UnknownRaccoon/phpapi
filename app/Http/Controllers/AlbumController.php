@@ -2,36 +2,33 @@
 
 namespace App\Http\Controllers;
 
+use Auth, Gate;
 use Illuminate\Http\Request;
-use App\Http\Requests;
-use Auth;
-use Illuminate\Support\Facades\Cache;
+use App\Album;
 
-class AlbumController extends RESTController
+class AlbumController extends Controller
 {
     public function __construct()
     {
-        $this->model = 'App\Album';
         $this->middleware('jwt.auth');
     }
 
     /**
-     * @api {get} /albums/ Get Album List
+     * @api {get} /albums/ Get Albums List
      *
      * @apiGroup Albums
      * @apiSuccessExample Success-Response:
      *     HTTP/1.1 200 OK
      *     [
-     *         {
-     *             "id": 1,
-     *             "author": 1,
-     *             "name": "Kitties",
-     *             "active": 1,
-     *             "created_at": "2016-04-28 09:09:03",
-     *             "updated_at": "2016-04-28 09:09:03"
-     *         }
-     *     ]
-     *
+     *          {
+     *              "id": 1,
+     *              "author": 21,
+     *              "name": "Kitties",
+     *              "active": 1,
+     *              "created_at": "2016-05-15 10:13:14",
+     *              "updated_at": "2016-05-15 10:13:14"
+     *          }
+     *      ]
      * @apiErrorExample Error-Response:
      *     HTTP/1.1 400 Bad Request
      *     {
@@ -40,12 +37,15 @@ class AlbumController extends RESTController
      */
     public function index()
     {
-        return response()->json(Auth::user()->albumsAllowed());
+        return response()->json(Auth::user()->albumsAllowedIncludingOwn());
     }
 
     /**
      * @api {post} /albums/ Add New Album
-     *
+     * 
+     * @apiParam {Number} author Author identifier
+     * @apiParam {String} name Album name
+     * @apiParam {Number} active Album state
      * @apiGroup Albums
      * @apiSuccessExample Success-Response:
      *     HTTP/1.1 201 Created
@@ -57,7 +57,6 @@ class AlbumController extends RESTController
      *         "created_at": "2016-04-28 09:09:03",
      *         "id": 1
      *     }
-     *
      * @apiErrorExample Error-Response:
      *     HTTP/1.1 406 Not Acceptable
      *     {
@@ -69,12 +68,20 @@ class AlbumController extends RESTController
      */
     public function store(Request $request)
     {
-        return parent::store($request);
+        if(Gate::denies('create-album')) {
+            return $this->jsonErrorResponse('You have no rights to create an album', 403);
+        }
+        if(!Auth::user()->isAdmin()) {
+            $request->merge(['author' => Auth::user()->id]);
+        }
+        Album::validate($request->all());
+        return response()->json(Album::create($request->all()), 201);
     }
 
     /**
-     * @api {get} /albums/:id Get Album
-     * @apiParam {Number} id Album identifier
+     * @api {get} /albums/:album Get Album
+     * 
+     * @apiParam {Number} album Album identifier
      * @apiGroup Albums
      * @apiSuccessExample Success-Response:
      *     HTTP/1.1 200 OK
@@ -86,7 +93,6 @@ class AlbumController extends RESTController
      *         "created_at": "2016-04-28 09:09:03",
      *         "updated_at": "2016-04-28 09:09:03"
      *     }
-     *
      * @apiErrorExample Error-Response:
      *     HTTP/1.1 404 Not Found
      *     {
@@ -94,46 +100,64 @@ class AlbumController extends RESTController
      *         "code": 404
      *     }
      */
-    public function show($id)
+    public function show(Album $album)
     {
-        return parent::show($id);
+        if(Gate::denies('access', $album)) {
+            return $this->jsonErrorResponse('You have no rights to view this album', 403);
+        }
+        return response()->json($album);
     }
 
     /**
-     * @api {put} /albums/:id Update Album Data
-     * @apiParam {Number} id Album identifier
+     * @api {put} /albums/:album Update Album Data
+     * 
+     * @apiParam {Number} album Album identifier
+     * @apiParam {Number} author Author identifier
+     * @apiParam {String} name Album name
+     * @apiParam {Number} active Album state
      * @apiGroup Albums
      * @apiSuccessExample Success-Response:
      *     HTTP/1.1 204 No Content
-     *
      * @apiErrorExample Error-Response:
-     *     HTTP/1.1 403 Forbidden
+     *     HTTP/1.1 406 Not Acceptable
      *     {
-     *          "error":"This action is unauthorized.",
-     *          "code":403
+     *         "validation_errors": [
+     *             "The name field is required."
+     *         ]
      *     }
      */
-    public function update(Request $request, $id)
+    public function update(Request $request, Album $album)
     {
-        return parent::update($request, $id);
+        if(Gate::denies('edit', $album)) {
+            return $this->jsonErrorResponse('You have no rights to change this album', 403);
+        }
+        if(!Auth::user()->isAdmin()) {
+            $request->merge(['author' => $album->author]);
+        }
+        $album->update($request->all());
+        return response()->json([], 204);
     }
 
     /**
-     * @api {delete} /albums/:id Delete Album
-     * @apiParam {Number} id Album identifier
+     * @api {delete} /albums/:album Delete Album
+     * 
+     * @apiParam {Number} album Album identifier
      * @apiGroup Albums
      * @apiSuccessExample Success-Response:
      *     HTTP/1.1 204 No Content
-     *
      * @apiErrorExample Error-Response:
      *     HTTP/1.1 403 Forbidden
      *     {
-     *          "error":"This action is unauthorized.",
+     *          "error":"You have no rights to delete this album",
      *          "code":403
      *     }
      */
-    public function destroy($id)
+    public function destroy(Album $album)
     {
-        return parent::destroy($id);
+        if(Gate::denies('edit', $album)) {
+            return $this->jsonErrorResponse('You have no rights to delete this album', 403);
+        }
+        $album->delete();
+        return response()->json([], 204);
     }
 }

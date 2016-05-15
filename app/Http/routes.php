@@ -11,25 +11,35 @@
 |
 */
 
-Route::get('/', function () {
-    return view('welcome');
-});
-
-Route::resource('albums', 'AlbumController', ['only' => [
+Route::resource('albums', 'AlbumController', [
+    'only' => [
         'index', 'store', 'show', 'update', 'destroy'
+    ], 'parameters' => [
+        'albums' => 'album',
     ],
-    'parameters' => [
-        'albums' => 'id',
-    ] 
 ]);
 
-Route::resource('users', 'UserController', ['only' => [
+Route::resource('/albums/{album}/photos', 'PhotoController', [
+    'only' => [
+        'index', 'store', 'show', 'destroy',
+    ], 'parameters' => [
+        'photos' => 'photo',
+    ],
+]);
+
+Route::resource('users', 'UserController', [
+    'only' => [
         'index', 'store', 'show', 'update', 'destroy',
     ], 'parameters' => [
-        'users' => 'id',
-    ] 
+        'users' => 'user',
+    ],
 ]);
 
+Route::resource('/albums/{album}/permissions/', 'PermissionController', [
+    'only' => [
+        'index', 'store',
+    ],
+]);
 Route::post('/login', 'Auth\AuthController@authenticate');
-Route::get('/reset', 'Auth\PasswordController@reset');
+Route::post('/reset', 'Auth\PasswordController@reset');
 Route::post('/reset/{token}', 'Auth\PasswordController@setNew');

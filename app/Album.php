@@ -5,45 +5,81 @@ namespace App;
 use Illuminate\Database\Eloquent\Model;
 use Validator;
 
+/**
+ * App\Album
+ *
+ * @property integer $id
+ * @property integer $author
+ * @property string $name
+ * @property boolean $active
+ * @property \Carbon\Carbon $created_at
+ * @property \Carbon\Carbon $updated_at
+ * @method static \Illuminate\Database\Query\Builder|\App\Album whereId($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\Album whereAuthor($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\Album whereName($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\Album whereActive($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\Album whereCreatedAt($value)
+ * @method static \Illuminate\Database\Query\Builder|\App\Album whereUpdatedAt($value)
+ * @mixin \Eloquent
+ */
 class Album extends Model
 {
+    use SafeModelTrait;
+
     protected $fillable = [
-        'author', 'name', 'active',
+        'author', 'active', 'name',
     ];
+
+    /**
+     * Returns author of the album
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsTo
+     */
     public function author()
     {
         return $this->belongsTo(User::class);
     }
+
+    /**
+     * Returns album photos
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany
+     */
+    public function photos()
+    {
+        return $this->hasMany(Photo::class, 'album');
+    }
+
+    /**
+     * Returns the list of users that have access to album
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\BelongsToMany
+     */
     public function users()
     {
         return $this->belongsToMany(User::class, 'permissions', 'album', 'user');
     }
-    public static function getValidator(array $data)
+
+    /**
+     * Validates model data, used inside SafeModelTrait
+     *
+     * @param array $data
+     * @param int $id
+     * @param $required
+     * @return \Illuminate\Validation\Validator
+     */
+    private static function prepareValidator(array $data = [], $id = 0, $required = true)
     {
-        return Validator::make($data, [
-            'author' => 'numeric|exists:users,id|required',
-            'name' => 'max:255|required',
-            'active' => 'numeric|between:0,1|required',
-        ]);
-    }
-    public static function create(array $attributes = Array())
-    {
-        $validator = Album::getValidator($attributes);
-        if($validator->fails()) {
-            return ['validation_errors' => $validator->errors()->all()];
+        $validationArray = [
+            'name' => 'max:50',
+            'active' => 'in:0,1',
+            'author' => 'exists:users,id,role,!client',
+        ];
+        if($required) {
+            $validationArray['name'] .= '|required';
+            $validationArray['active'] .= '|required';
+            $validationArray['author'] .= '|required';
         }
-        else return parent::create($attributes);
-    }
-    public function save(array $options = Array())
-    {
-        $validator = Album::getValidator([
-            'author' => $this->author,
-            'name' => $this->name,
-            'active' => $this->active,
-        ]);
-        if($validator->fails()) {
-            return ['validation_errors' => $validator->errors()->all()];
-        }
-        else return parent::save($options);
+        return Validator::make($data, $validationArray);
     }
 }

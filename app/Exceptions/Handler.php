@@ -45,12 +45,14 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Exception $e)
     {
-        $code = parent::render($request, $e);
-        $error = $this->convertExceptionToResponse($e);
-        $response = [];
-        $response['error'] = $e->getMessage();
-        $response['code'] = $code->getStatusCode();
-        //return response()->json($response, $code->getStatusCode());
+        if($e instanceof ValidationException) {
+            return response()->json(['validation_errors' => $e->validator->errors()->all()], 406);
+        }
+        $code = parent::render($request, $e)->getStatusCode();
+        $response = [
+            'error' => $e->getMessage(),
+        ];
+        //return response()->json($response, $code);
         return parent::render($request, $e);
     }
 }

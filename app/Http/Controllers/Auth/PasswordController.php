@@ -3,13 +3,13 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
+use App\User;
+use App\PasswordReset;
+use Carbon\Carbon;
 use Illuminate\Foundation\Auth\ResetsPasswords;
 use Illuminate\Http\Request;
-use App\Token;
-use Auth;
-use Mail;
-use Hash;
-use Carbon\Carbon;
+use Mail, Hash;
+
 class PasswordController extends Controller
 {
     /*
@@ -32,33 +32,69 @@ class PasswordController extends Controller
      */
     public function __construct()
     {
-        //$this->middleware('guest');
-        $this->middleware('jwt.auth');
     }
-    public function reset()
+
+    /**
+     * @api {post} /reset/ Generate Token
+     *
+     * @apiGroup Password Reset
+     * @apiParam {String} email User's email
+     * @apiSuccessExample Success-Response:
+     *     HTTP/1.1 204 No Content
+     * @apiErrorExample Error-Response:
+     *     HTTP/1.1 406 Not Acceptable
+     *     {
+     *         "error": "No email provided"
+     *     }
+     */
+    public function reset(Request $request)
     {
-        $user = Auth::user();
-        $token = Token::create(['user' => Auth::id(), 'token' => str_random(30), 'used' => false]);
+        if(!$request->exists('email')) {
+            return $this->jsonErrorResponse('No email provided', 406);
+        }
+        $user = User::whereEmail($request->all()['email'])->firstOrFail();
+        $token = PasswordReset::create([
+            'user' => $user->id,
+            'token' => str_random(30),
+            'used' => false
+        ]);
         $message = 'Your password reset token: ' . $token->token;
-        Mail::raw($message, function($m) use ($token, $user)
+        Mail::raw($message, function($m) use ($user)
         {
             $m->from('intersog.labs@gmail.com');
             $m->to($user->email)->subject('Password reset token');
         });
         return response()->json([], 204);
     }
+
+    /**
+     * @api {post} /reset/:token Reset Password
+     *
+     * @apiGroup Password Reset
+     * @apiParam {String} token Password reset token
+     * @apiSuccessExample Success-Response:
+     *     HTTP/1.1 204 No Content
+     * @apiErrorExample Error-Response:
+     *     HTTP/1.1 406 Not Acceptable
+     *     {
+     *         "error": "Token has already been used"
+     *     }
+     */
     public function setNew(Request $request, $token)
     {
-        $token = Token::where('token', $token)->firstOrFail();
-        if(!$token->used) {
-            if($token->created_at >= Carbon::now()->subMinutes(60)) {
-                $this->validate($request, ['password' => 'required|min:4']);
-                Auth::user()->password = Hash::make($request->input('password'));
-                Auth::user()->save();
-                $token->used = true;
-                $token->save();
-                return response()->json([], 204);
-            }
+        $token = PasswordReset::whereToken($token)->firstOrFail();
+        if($token->used) {
+            return $this->jsonErrorResponse('Token has already been used', 406);
         }
+        if($token->created_at <= Carbon::now()->subMinutes(env('TOKEN_LIFETIME', 60))) {
+            return $this->jsonErrorResponse('Token expired', 406);
+        }
+        $user = User::find($token->user);
+        $this->validate($request, ['password' => 'required|min:4']);
+        $user->password = Hash::make($request->input('password'));
+        $user->save();
+        $token->used = true;
+        $token->save();
+        return response()->json([], 204);
     }
 }

@@ -4,30 +4,26 @@ namespace App\Policies;
 
 use App\User;
 use App\Album;
-use App\Permission;
-class AlbumPolicy extends AbstractPolicy
+
+class AlbumPolicy extends Policy
 {
+
     /**
      * Create a new policy instance.
      *
      * @return void
      */
-    public function show(User $user, $album)
+    public function __construct()
     {
-        return $user->id === $album->author ||
-            Permission::where('user', $user->id)->where('album', $album->id)->first() !== null;
     }
-    public function store(User $user)
+
+    public function access(User $user, Album $album)
     {
-        return $user->role === 'photographer';
+        return in_array($user->getAccess($album), ['read', 'full']);
     }
-    public function update(User $user, $album)
+
+    public function edit(User $user, Album $album)
     {
-        return $user->id === $album->author ||
-            Permission::where('user', $user->id)->where('album', $album->id)->where('access', 'full')->first() !== null;
-    }
-    public function destroy(User $user, $album)
-    {
-        return $this->update;
+        return $user->getAccess($album) === 'full';
     }
 }
