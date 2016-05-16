@@ -173,7 +173,7 @@ class PhotoController extends Controller
         if(Gate::denies('edit', $album)) {
             return $this->jsonErrorResponse('You have no rights to delete this photo', 403);
         }
-        File::delete($photo->full_path);
+        File::delete(base_path() . "/public/img/{$photo->album}/{$photo->image}");
         $photo->delete();
         Cache::forget("album_{$album->id}");
         return response()->json([], 204);
